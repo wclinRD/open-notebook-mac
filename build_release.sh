@@ -184,6 +184,24 @@ grep -q '/api/:path\*' "$WEB/server.js" || fail "standalone server.js is missing
 grep -q '5055' "$WEB/server.js" || fail "standalone server.js does not target the API port"
 [[ -d "$WEB/.next/static" ]] || fail "static assets missing; the app would render unstyled"
 
+# ------------------------------------------------------------------- app icon
+step "Generating app icon"
+LOGO="$REPO_ROOT/Sources/logo.png"
+[[ -f "$LOGO" ]] || fail "app icon source missing at $LOGO"
+ICONSET="$CACHE_DIR/AppIcon.iconset"
+rm -rf "$ICONSET"
+mkdir -p "$ICONSET"
+# iconutil requires one file per size, with @2x being the retina double.
+for entry in icon_16x16:16 icon_16x16@2x:32 icon_32x32:32 icon_32x32@2x:64 \
+             icon_128x128:128 icon_128x128@2x:256 icon_256x256:256 \
+             icon_256x256@2x:512 icon_512x512:512 icon_512x512@2x:1024; do
+  name="${entry%%:*}"
+  px="${entry##*:}"
+  sips -z "$px" "$px" "$LOGO" --out "$ICONSET/$name.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
+
 # ------------------------------------------------------------------ metadata
 step "Writing Info.plist"
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -195,6 +213,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key><string>Open Notebook</string>
     <key>CFBundleExecutable</key><string>$APP_NAME</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleVersion</key><string>1</string>
