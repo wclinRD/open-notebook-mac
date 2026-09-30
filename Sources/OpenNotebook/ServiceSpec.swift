@@ -47,11 +47,14 @@ public extension ServiceSpec {
         let surrealDB = ServiceSpec(
             name: ServiceName.surrealDB.rawValue,
             executableURL: resourcesURL.appending(path: "surreal/surreal"),
+            // `--pass=<value>` rather than `--pass <value>`: a secret beginning
+            // with a dash would otherwise be read as the next flag and the server
+            // would refuse to start.
             arguments: [
                 "start",
                 "--log", "info",
-                "--user", dataEnv["SURREAL_USER"] ?? "root",
-                "--pass", surrealPassword,
+                "--user=\(dataEnv["SURREAL_USER"] ?? "root")",
+                "--pass=\(surrealPassword)",
                 "rocksdb:\(dataRoot.appending(path: "surreal_data/open_notebook.db").path)"
             ],
             workingDirectoryURL: dataRoot,

@@ -65,6 +65,21 @@ final class DataDirectoryTests: XCTestCase {
     func testGeneratedSecretsDifferBetweenRuns() {
         XCTAssertNotEqual(DataDirectory.token(byteCount: 32), DataDirectory.token(byteCount: 32))
     }
+
+    /// A secret starting with `-` is read as a CLI flag, not as the value of
+    /// `--pass`, and SurrealDB then refuses to start. Base64 could produce one in
+    /// roughly 1 launch out of 64.
+    func testGeneratedSecretsCanNeverBeMistakenForFlags() {
+        for _ in 0..<500 {
+            for secret in [DataDirectory.token(byteCount: 32), DataDirectory.token(byteCount: 24)] {
+                XCTAssertFalse(secret.hasPrefix("-"), "\(secret) would parse as a flag")
+                XCTAssertTrue(
+                    secret.allSatisfy { $0.isHexDigit && !$0.isUppercase },
+                    "\(secret) is not lowercase hex"
+                )
+            }
+        }
+    }
 }
 
 final class ManagedServiceEnvironmentTests: XCTestCase {

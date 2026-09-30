@@ -81,17 +81,18 @@ public enum DataDirectory {
         """
     }
 
-    /// URL-safe base64 of cryptographically secure random bytes.
+    /// Random secret as lowercase hex.
+    ///
+    /// Deliberately not base64: that alphabet includes `-`, and a password
+    /// starting with `-` is parsed by the SurrealDB CLI as a flag rather than as
+    /// the value of `--pass`, so the server would refuse to start. Hex cannot
+    /// collide with a leading dash.
     static func token(byteCount: Int) -> String {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         var rng = SystemRandomNumberGenerator()
         for index in bytes.indices {
             bytes[index] = UInt8.random(in: .min ... .max, using: &rng)
         }
-        return Data(bytes)
-            .base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
+        return bytes.map { String(format: "%02x", $0) }.joined()
     }
 }

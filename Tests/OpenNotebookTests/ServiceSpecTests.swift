@@ -70,10 +70,23 @@ final class ServiceSpecTests: XCTestCase {
 
         let specs = ServiceSpec.buildAll(from: resources, dataRoot: data)
         let surrealDB = try XCTUnwrap(specs.first { $0.name == "SurrealDB" })
-        let args = surrealDB.arguments
-        let passFlagIndex = try XCTUnwrap(args.firstIndex(of: "--pass"))
 
-        XCTAssertEqual(args[passFlagIndex + 1], "from_env_file")
+        XCTAssertTrue(surrealDB.arguments.contains("--pass=from_env_file"), "\(surrealDB.arguments)")
+    }
+
+    /// A password starting with a dash must stay attached to --pass=; as a
+    /// separate token SurrealDB would read it as a flag and refuse to start.
+    func testDashLeadingPasswordStaysAttachedToItsFlag() throws {
+        let (resources, data) = try makeSandbox()
+        try "SURREAL_PASSWORD=-nSecret\n".write(
+            to: data.appending(path: ".env"), atomically: true, encoding: .utf8
+        )
+
+        let specs = ServiceSpec.buildAll(from: resources, dataRoot: data)
+        let surrealDB = try XCTUnwrap(specs.first { $0.name == "SurrealDB" })
+
+        XCTAssertTrue(surrealDB.arguments.contains("--pass=-nSecret"), "\(surrealDB.arguments)")
+        XCTAssertFalse(surrealDB.arguments.contains("-nSecret"), "must not appear as a bare token")
     }
 
     /// Regression: the spec used to fabricate an empty encryption key when the
