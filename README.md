@@ -37,9 +37,93 @@ open /Applications/OpenNotebook.app
 | macOS | 14 以上 |
 | 架構 | Apple Silicon（arm64） |
 | 磁碟 | 約 1.1 GB |
-| AI 供應商 | 需自備。實測可用 [LM Studio](https://lmstudio.ai/)，於 app 內「設定 → AI 模型」加入 OpenAI Compatible provider |
+| AI 供應商 | 需自備，見下方「接上 LLM」 |
 
 首次啟動時 SurrealDB 會自動跑 25 個資料庫 migration，約 3 秒。
+
+## 接上 LLM
+
+app **不內附任何模型**，也連不出去 —— 它只是本機服務的啟動器。LLM 要自己裝、自己接。
+以下以 LM Studio 為例（實測可用的路徑），任何 OpenAI 相容伺服器都一樣。
+
+### 1. 裝 LM Studio 並下載模型
+
+從 [lmstudio.ai](https://lmstudio.ai/) 下載安裝，開啟後在搜尋框找模型，選一個你要的下載。
+至少需要兩種：
+
+| 角色 | 用途 | 建議 |
+|---|---|---|
+| 聊天模型 | 問答、摘要 | 30B 以上 MoE（例如 `qwen3.6-27b-a3b-coder`）。**必須支援 context ≥ 8192**，長文件會超出 |
+| 嵌入模型 | 檢索來源內容 | `text-embedding-nomic-embed-text-v1.5` 之類的小模型即可 |
+
+沒下載聊天模型的話，問答功能會報錯。
+
+### 2. 開啟本機伺服器
+
+LM Studio 側邊欄最下方的 **Developer / 本機伺服器** 分頁 → 開啟 Start Server。
+預設 port **1234**。
+
+確認它活著（應該列出你下載的模型）：
+
+```bash
+curl http://localhost:1234/v1/models
+```
+
+沒反應就是沒開，或 port 被別人佔了。
+
+### 3. 在 app 裡註冊
+
+app → 側邊欄 **設定 → AI 模型**：
+
+1. **Add Credential** → 選 **OpenAI Compatible**
+2. Base URL 填 `http://localhost:1234/v1`
+3. API key 填 `lm-studio` —— 這是佔位字串，LM Studio 不驗證，但欄位不能留空
+4. **Save**，接著按 **Test Connection** 驗證
+
+> 憑證不是明文存的，會用 `OPEN_NOTEBOOK_ENCRYPTION_KEY` 加密後放進資料庫。
+> 所以換掉 `.env` 會讓已存的憑證讀不出來（見下方「資料放在哪」）。
+
+### 4. 逐個加入模型
+
+**Add Model**，每個模型一筆。Model name 要跟 `/v1/models` 回傳的 `id` **完全一致**：
+
+| 欄位 | 填什麼 |
+|---|---|
+| Provider | 剛建立的 credential |
+| Model name | `curl` 到的 `id` 原文，例如 `qwen3.6-27b-a3b-coder` |
+| Type | 聊天模型填 `language`；嵌入模型填 `embedding` |
+
+Model name 拼錯是最常見的失敗原因 —— 連不上時先回頭 `curl` 核對一次。
+
+### 5. 指定預設模型
+
+同一頁往下有「預設模型」區，**必填兩個**：
+
+- **Chat model** — 沒有它整個問答都不能用
+- **Embedding model** — 沒有它上傳的文件無法建立索引
+
+另外三個可選，不填會自動沿用 Chat model：
+
+- **Transformation model** — 用來把來源內容轉成筆記。heavy prompt 吃 token 很兇，
+  用 35B 等大模型容易撞到 8192 上限。實測另外掛一個 coder 級的較小模型比較穩
+- **Tools model** — 給 agent 用
+- **Large context model** — 超過 105,000 tokens 時自動切換
+
+TTS / STT 留空。播客生成與音訊轉錄在本地沒有對應模型，本來就用不了。
+
+### 驗證
+
+設定頁每個模型旁都有 Test 按鈕。更直接的驗法是建一個筆記本、丟一份 PDF 進去、
+對它問一個只有文件裡才有的問題 —— 答得出來就代表 embedding 與 chat 都通了。
+
+> **PDF 需要系統的 `libmagic`**：`brew install libmagic`，否則 PDF 會解析失敗。
+
+### 其他供應商
+
+Ollama、oMLX 在 provider 清單裡有自己的項目（base URL 分別預設 `localhost:11434`、`localhost:11435`），
+選它們就不要選 OpenAI Compatible。雲端供應商（OpenAI、Anthropic、Google、Groq、OpenRouter…）
+填自己的 API key 即可。完整清單與各廠的環境變數見
+[上游文件](https://github.com/lfnovo/open-notebook/blob/main/docs/5-CONFIGURATION/ai-providers.md)。
 
 ## 資料放在哪
 
